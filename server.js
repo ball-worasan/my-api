@@ -270,6 +270,92 @@ app.post('/account/update', authenticateToken, upload.single('picture'), async (
     }
 });
 
+
+// ############# เพิ่มใน server.js ##############
+
+// โพสบล็อกใหม่่
+app.post('/create-post', authenticateToken, async (req, res) => {
+    const { title, detail, category } = req.body;
+    try {
+        const userid = req.user.id; // ใช้ user id จาก JWT
+        const [result] = await pool.query(
+            'INSERT INTO blog (userid, title, detail, category) VALUES (?, ?, ?, ?)',
+            [userid, title, detail, category]
+        );
+        res.status(201).json({ message: "โพสต์ถูกสร้างเรียบร้อย", postId: result.insertId });
+    } catch (err) {
+        res.status(500).json({ error: "ไม่สามารถสร้างโพสต์ได้" });
+    }
+});
+
+
+// แสดงโพสทั้งหมดตาม user
+app.get('/read-post/', authenticateToken, async (req, res) => {
+    try {
+        const userid = req.user.id;
+        const [results] = await pool.query('SELECT * FROM blog WHERE userid = ?', [userid])
+        if (results.length === 0) {
+            return res.status(404).json({ error: "ไม่พบบทความ" })
+        }
+        res.json(results)
+    } catch (err) {
+        console.log(err)
+        res.status(500).json({ error: "ไม่สามารถดึงข้อมูลได้" })
+    }
+});
+
+// ดึงข้อมูล blog ตาม id
+app.get('/post/:blogid', async (req, res) => {
+    const { blogid } = req.params; // ดึงค่า blogid จาก URL Parameters
+    try {
+        // คำสั่ง SQL สำหรับดึงข้อมูลบล็อกจากฐานข้อมูล
+        const [result] = await pool.query('SELECT * FROM blog WHERE blogid = ?', [blogid]);
+        // ตรวจสอบว่าพบบล็อกหรือไม่
+        if (result.length === 0) {
+            return res.status(404).json({ message: 'Blog not found' });
+        }
+        // ส่งข้อมูลบล็อกที่พบกลับไปยัง client
+        return res.json(result[0]);
+    } catch (err) {
+        console.error("Error fetching blog data: ", err); // แสดงข้อผิดพลาดใน console
+        return res.status(500).json({ message: 'Error fetching blog data', error: err });
+    }
+});
+
+// ลบข้อมูล blog
+app.delete('/post/:blogid', async (req, res) => {
+    const { blogid } = req.params;
+    try {
+        const [result] = await pool.query('DELETE FROM blog WHERE blogid = ?', [blogid]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Blog not found' });
+        }
+        return res.json({ message: 'Blog deleted successfully' });
+    } catch (err) {
+        console.error("Error executing SQL: ", err); // ตรวจสอบข้อผิดพลาด SQL
+        return res.status(500).json({ message: 'Error deleting the blog', error: err });
+    }
+});
+
+// แก้ไขข้อมูล blog
+app.put('/post/:blogid', async (req, res) => {
+    const { blogid } = req.params;
+    const { title, detail, category } = req.body;
+    try {
+        const [result] = await pool.query(
+            'UPDATE blog SET title = ?, detail = ?, category = ? WHERE blogid = ?',
+            [title, detail, category, blogid]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Blog not found' });
+        }
+        return res.json({ message: 'Blog updated successfully' });
+    } catch (err) {
+        console.error("Error updating SQL: ", err); // ตรวจสอบข้อผิดพลาด SQL
+        return res.status(500).json({ message: 'Error updating the blog', error: err });
+    }
+});
+
 app.use((err, req, res, next) => {
     console.error(err);
     res.status(500).json({ message: 'เกิดข้อผิดพลาดในระบบ' });
